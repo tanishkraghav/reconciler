@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Reconciler — Transaction Ledger</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,400&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:       #0c0e10;
+    --surface:  #13161a;
+    --card:     #191d22;
+    --border:   #252a32;
+    --accent:   #00e5a0;
+    --accent2:  #4d9fff;
+    --warn:     #ffb830;
+    --danger:   #ff5c6a;
+    --muted:    #5a6270;
+    --text:     #d8dde6;
+    --texthi:   #f0f4f9;
+    --font:     'Syne', sans-serif;
+    --mono:     'DM Mono', monospace;
+  }
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { font-size: 14px; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font);
+    min-height: 100vh;
+    line-height: 1.5;
+  }
+
+  /* ── Header ── */
+  header {
+    padding: 20px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0;
+    background: rgba(12,14,16,.92);
+    backdrop-filter: blur(12px);
+    z-index: 100;
+  }
+  .logo {
+    width: 36px; height: 36px;
+    background: var(--accent);
+    border-radius: 8px;
+    display: grid; place-items: center;
+    font-family: var(--mono);
+    font-weight: 500;
+    color: #000;
+    font-size: 15px;
+    letter-spacing: -1px;
+    flex-shrink: 0;
+  }
+  header h1 { font-size: 17px; font-weight: 700; color: var(--texthi); letter-spacing: -.3px; }
+  header span { font-size: 12px; color: var(--muted); font-family: var(--mono); }
+  .spacer { flex: 1; }
+  .btn {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: none;
+    cursor: pointer;
+    font-family: var(--font);
+    font-size: 13px;
+    font-weight: 600;
+    transition: all .15s;
+    display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-accent { background: var(--accent); color: #000; }
+  .btn-accent:hover { background: #00fdb5; transform: translateY(-1px); }
+  .btn-ghost { background: var(--border); color: var(--text); }
+  .btn-ghost:hover { background: #2e3540; }
+  .btn-danger { background: #2a1316; color: var(--danger); border: 1px solid #3d1a1e; }
+  .btn-danger:hover { background: #3d1a1e; }
+
+  /* ── Layout ── */
+  .container { max-width: 1280px; margin: 0 auto; padding: 28px 32px; }
+  
+  /* ── Stat Cards ── */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    position: relative;
+    overflow: hidden;
+  }
+  .stat-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+  }
+  .stat-card.green::before  { background: var(--accent); }
+  .stat-card.blue::before   { background: var(--accent2); }
+  .stat-card.yellow::before { background: var(--warn); }
+  .stat-card.red::before    { background: var(--danger); }
+  .stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; font-family: var(--mono); }
+  .stat-value { font-size: 32px; font-weight: 800; color: var(--texthi); margin: 6px 0 4px; line-height: 1; }
+  .stat-sub { font-size: 12px; color: var(--muted); }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .tabs { display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
+  .tab {
+    padding: 7px 16px; border-radius: 6px; font-size: 13px; font-weight: 600;
+    cursor: pointer; border: none; background: transparent; color: var(--muted);
+    transition: all .15s; font-family: var(--font);
+  }
+  .tab.active { background: var(--border); color: var(--texthi); }
+  select, input[type=text] {
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); border-radius: 8px; padding: 8px 12px;
+    font-family: var(--font); font-size: 13px; outline: none;
+  }
+  select:focus, input:focus { border-color: var(--accent); }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .table-head {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .table-title { font-size: 14px; font-weight: 700; color: var(--texthi); }
+  .count-badge {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 2px 10px;
+    font-family: var(--mono); font-size: 11px; color: var(--muted);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    padding: 10px 16px; font-size: 11px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .8px; font-weight: 500;
+    text-align: left; border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background .1s;
+    cursor: pointer;
+  }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: rgba(255,255,255,.025); }
+  td { padding: 12px 16px; font-size: 13px; vertical-align: middle; }
+  .td-date { font-family: var(--mono); font-size: 12px; color: var(--muted); white-space: nowrap; }
+  .td-desc { font-weight: 500; color: var(--texthi); max-width: 220px; }
+  .td-desc .ref { font-size: 11px; color: var(--muted); font-family: var(--mono); }
+  .td-amt { font-family: var(--mono); font-weight: 500; text-align: right; }
+  .td-amt.debit  { color: var(--danger); }
+  .td-amt.credit { color: var(--accent); }
+  .td-balance { font-family: var(--mono); font-size: 12px; color: var(--muted); text-align: right; }
+  .td-cat {
+    font-size: 11px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 20px; padding: 2px 9px; color: var(--muted);
+    display: inline-block; white-space: nowrap;
+  }
+
+  /* ── Status Pill ── */
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    border-radius: 20px; padding: 3px 10px; font-size: 11px;
+    font-family: var(--mono); font-weight: 500; white-space: nowrap;
+  }
+  .pill::before { content: ''; width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .pill-matched    { background: #0d2620; color: var(--accent);  border: 1px solid #1a4a38; }
+  .pill-matched::before { background: var(--accent); }
+  .pill-unmatched  { background: #1a1a10; color: var(--warn);   border: 1px solid #3d3010; }
+  .pill-unmatched::before { background: var(--warn); }
+  .pill-exception  { background: #2a1316; color: var(--danger); border: 1px solid #3d1a1e; }
+  .pill-exception::before { background: var(--danger); }
+  .pill-duplicate  { background: #12172a; color: var(--accent2);border: 1px solid #1a2a4a; }
+  .pill-duplicate::before { background: var(--accent2); }
+  .pill-pending    { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+  .pill-pending::before { background: var(--muted); }
+
+  /* ── Add Transaction Drawer ── */
+  .overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    backdrop-filter: blur(4px);
+    z-index: 200;
+    display: none; align-items: flex-end; justify-content: flex-end;
+  }
+  .overlay.open { display: flex; }
+  .drawer {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px 0 0 16px;
+    width: 380px; height: 100vh;
+    padding: 28px 24px;
+    overflow-y: auto;
+    animation: slideIn .2s ease;
+  }
+  @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } }
+  .drawer h2 { font-size: 16px; font-weight: 700; color: var(--texthi); margin-bottom: 20px; }
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; }
+  .field input, .field select { width: 100%; }
+  .radio-group { display: flex; gap: 10px; }
+  .radio-btn {
+    flex: 1; padding: 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface);
+    color: var(--muted); cursor: pointer; text-align: center;
+    font-size: 13px; font-family: var(--font); font-weight: 600; transition: all .15s;
+  }
+  .radio-btn.sel { border-color: var(--accent); color: var(--accent); background: #0d2620; }
+
+  /* ── Reconcile Banner ── */
+  .banner {
+    background: linear-gradient(135deg, #0d2620 0%, #0c1a2e 100%);
+    border: 1px solid #1a3d2c;
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 24px;
+    display: flex; align-items: center; gap: 16px;
+  }
+  .banner-icon { font-size: 24px; }
+  .banner-text h3 { font-size: 14px; font-weight: 700; color: var(--texthi); }
+  .banner-text p  { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+  /* ── Empty state ── */
+  .empty { padding: 48px; text-align: center; color: var(--muted); }
+  .empty .e-icon { font-size: 32px; margin-bottom: 12px; }
+  .empty p { font-size: 13px; }
+
+  /* ── Detail row expanded ── */
+  .expanded-row td { background: var(--surface); }
+  .expand-panel {
+    display: flex; gap: 20px; padding: 4px 0; flex-wrap: wrap;
+  }
+  .expand-kv { display: flex; flex-direction: column; gap: 2px; }
+  .expand-kv span:first-child { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+  .expand-kv span:last-child { font-size: 12px; color: var(--texthi); font-family: var(--mono); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  .pulse { animation: pulse 1.5s ease infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">₹≋</div>
+  <div>
+    <h1>Reconciler</h1>
+    <span>Transaction Reconciliation Engine</span>
+  </div>
+  <div class="spacer"></div>
+  <button class="btn btn-ghost" onclick="resetData()">↺ Reset Demo</button>
+  <button class="btn btn-accent" onclick="openDrawer()">+ Add Transaction</button>
+</header>
+
+<div class="container">
+
+  <!-- Stat Cards -->
+  <div class="stats" id="statsRow">
+    <div class="stat-card green">
+      <div class="stat-label">Matched</div>
+      <div class="stat-value" id="sMatched">—</div>
+      <div class="stat-sub">Reconciled pairs</div>
+    </div>
+    <div class="stat-card yellow">
+      <div class="stat-label">Unmatched</div>
+      <div class="stat-value" id="sUnmatched">—</div>
+      <div class="stat-sub">Needs review</div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">Exceptions</div>
+      <div class="stat-value" id="sException">—</div>
+      <div class="stat-sub">No reference</div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">Bank Balance</div>
+      <div class="stat-value" id="sBankBal">—</div>
+      <div class="stat-sub" id="sVariance">Variance: —</div>
+    </div>
+  </div>
+
+  <!-- Banner -->
+  <div class="banner" id="reconcileBanner">
+    <div class="banner-icon">🔄</div>
+    <div class="banner-text">
+      <h3>Run Reconciliation</h3>
+      <p>Match bank and internal transactions automatically using reference codes and fuzzy amount+date matching.</p>
+    </div>
+    <div class="spacer"></div>
+    <button class="btn btn-accent" onclick="reconcile()" id="reconcileBtn">Reconcile Now</button>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('bank', this)">🏦 Bank</button>
+      <button class="tab" onclick="switchTab('internal', this)">📒 Internal</button>
+      <button class="tab" onclick="switchTab('all', this)">All</button>
+    </div>
+    <select id="filterStatus" onchange="render()">
+      <option value="">All Statuses</option>
+      <option value="matched">Matched</option>
+      <option value="unmatched">Unmatched</option>
+      <option value="exception">Exception</option>
+      <option value="pending">Pending</option>
+    </select>
+    <select id="filterCat" onchange="render()">
+      <option value="">All Categories</option>
+    </select>
+    <input type="text" id="searchBox" placeholder="Search description or ref…" oninput="render()" style="min-width:200px" />
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-head">
+      <span class="table-title" id="tableTitle">Bank Ledger</span>
+      <span class="count-badge" id="tableCount">— entries</span>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Description</th>
+          <th>Category</th>
+          <th style="text-align:right">Debit</th>
+          <th style="text-align:right">Credit</th>
+          <th style="text-align:right">Balance</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="ledgerBody">
+        <tr><td colspan="7"><div class="empty pulse"><div class="e-icon">⏳</div><p>Loading…</p></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Add Transaction Drawer -->
+<div class="overlay" id="overlay" onclick="closeDrawerOnBg(event)">
+  <div class="drawer">
+    <h2>Add Transaction</h2>
+
+    <div class="field">
+      <label>Source</label>
+      <div class="radio-group">
+        <div class="radio-btn sel" id="rb-bank" onclick="selectSource('bank')">🏦 Bank</div>
+        <div class="radio-btn" id="rb-internal" onclick="selectSource('internal')">📒 Internal</div>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Date</label>
+      <input type="date" id="f-date" />
+    </div>
+    <div class="field">
+      <label>Description</label>
+      <input type="text" id="f-desc" placeholder="e.g. NEFT/SALARY CREDIT" />
+    </div>
+    <div class="field">
+      <label>Amount (negative = debit)</label>
+      <input type="number" id="f-amt" placeholder="-1500 or 85000" />
+    </div>
+    <div class="field">
+      <label>Reference (optional)</label>
+      <input type="text" id="f-ref" placeholder="REF12345" />
+    </div>
+    <div class="field">
+      <label>Category</label>
+      <select id="f-cat">
+        <option value="">None</option>
+        <option>Income</option><option>Housing</option><option>Food</option>
+        <option>Utilities</option><option>Insurance</option><option>Shopping</option>
+        <option>Health</option><option>Wallet</option><option>Cash</option><option>Other</option>
+      </select>
+    </div>
+
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-accent" style="flex:1" onclick="submitTx()">Add Transaction</button>
+      <button class="btn btn-ghost" onclick="closeDrawer()">Cancel</button>
+    </div>
+    <div id="drawerMsg" style="margin-top:12px;font-size:12px;color:var(--accent)"></div>
+  </div>
+</div>
+
+<script>
+// ── In-memory data engine ────────────────────────────────────────────────────
+let transactions = [];
+let ledgerData   = [];
+let currentTab   = 'bank';
+let expandedRow  = null;
+let selectedSrc  = 'bank';
+let stats = { matched:0, unmatched:0, exceptions:0, bankBal:0, intBal:0, variance:0 };
+
+function uid() { return Math.random().toString(36).slice(2,10); }
+
+const SEED = [
+  {date:"2025-01-03",desc:"NEFT/AIRTEL BROADBAND/REF8821",amt:-1499,src:"bank",ref:"REF8821",cat:"Utilities"},
+  {date:"2025-01-05",desc:"UPI/ZOMATO ORDER/TXN7734",amt:-645,src:"bank",ref:"TXN7734",cat:"Food"},
+  {date:"2025-01-07",desc:"SALARY CREDIT/ACME CORP",amt:85000,src:"bank",ref:"SAL001",cat:"Income"},
+  {date:"2025-01-09",desc:"ATM WITHDRAWAL/CONNAUGHT PLACE",amt:-5000,src:"bank",ref:null,cat:"Cash"},
+  {date:"2025-01-11",desc:"NEFT/LIC PREMIUM/POL9921",amt:-12500,src:"bank",ref:"POL9921",cat:"Insurance"},
+  {date:"2025-01-14",desc:"UPI/SWIGGY/TXN2291",amt:-380,src:"bank",ref:"TXN2291",cat:"Food"},
+  {date:"2025-01-15",desc:"IMPS/MONTHLY RENT/LANDLORD",amt:-22000,src:"bank",ref:"RENT01",cat:"Housing"},
+  {date:"2025-01-18",desc:"UPI/PAYTM WALLET TOP-UP",amt:-2000,src:"bank",ref:"TOP3391",cat:"Wallet"},
+  {date:"2025-01-20",desc:"NEFT/FREELANCE CLIENT A",amt:35000,src:"bank",ref:"FREQ01",cat:"Income"},
+  {date:"2025-01-22",desc:"UPI/AMAZON PURCHASE/ORD998811",amt:-3299,src:"bank",ref:"ORD9988",cat:"Shopping"},
+  {date:"2025-01-03",desc:"Airtel Broadband Bill",amt:-1499,src:"internal",ref:"REF8821",cat:"Utilities"},
+  {date:"2025-01-05",desc:"Zomato Food Order",amt:-645,src:"internal",ref:"TXN7734",cat:"Food"},
+  {date:"2025-01-07",desc:"Acme Corp Salary",amt:85000,src:"internal",ref:"SAL001",cat:"Income"},
+  {date:"2025-01-11",desc:"LIC Premium Payment",amt:-12500,src:"internal",ref:"POL9921",cat:"Insurance"},
+  {date:"2025-01-14",desc:"Swiggy Food Order",amt:-380,src:"internal",ref:"TXN2291",cat:"Food"},
+  {date:"2025-01-15",desc:"Monthly Rent Transfer",amt:-22000,src:"internal",ref:"RENT01",cat:"Housing"},
+  {date:"2025-01-20",desc:"Freelance Invoice A Payment",amt:35000,src:"internal",ref:"FREQ01",cat:"Income"},
+  {date:"2025-01-22",desc:"Amazon Purchase",amt:-3299,src:"internal",ref:"ORD9988",cat:"Shopping"},
+  {date:"2025-01-25",desc:"MYSTERY DEBIT/REF0099",amt:-750,src:"bank",ref:"REF0099",cat:null},
+  {date:"2025-01-28",desc:"Gym Membership",amt:-1800,src:"internal",ref:"GYM001",cat:"Health"},
+];
+
+function seed() {
+  transactions = SEED.map(r => ({
+    id: uid(), date: r.date, description: r.desc,
+    amount: r.amt, source: r.src, reference: r.ref,
+    category: r.cat, status: 'pending', matched_id: null,
+    created_at: new Date().toISOString()
+  }));
+  reconcile(false);
+}
+
+// ── Reconciliation engine ────────────────────────────────────────────────────
+function reconcile(announce=true) {
+  // reset
+  transactions.forEach(t => { t.status='pending'; t.matched_id=null; });
+
+  const bank = transactions.filter(t=>t.source==='bank');
+  const internal = transactions.filter(t=>t.source==='internal');
+  const usedI = new Set(), usedB = new Set();
+  const refSeen = {};
+
+  // Pass 1 — exact ref
+  for (const b of bank) {
+    if (!b.reference) continue;
+    if (refSeen[b.reference]) { b.status='duplicate'; continue; }
+    refSeen[b.reference] = b.id;
+    for (const i of internal) {
+      if (usedI.has(i.id)) continue;
+      if (i.reference===b.reference && Math.abs(i.amount-b.amount)<0.01) {
+        b.status=i.status='matched'; b.matched_id=i.id; i.matched_id=b.id;
+        usedI.add(i.id); usedB.add(b.id); break;
+      }
+    }
+  }
+
+  // Pass 2 — fuzzy amount+date
+  for (const b of bank) {
+    if (usedB.has(b.id)) continue;
+    const bd = new Date(b.date);
+    for (const i of internal) {
+      if (usedI.has(i.id)) continue;
+      const diff = Math.abs(new Date(i.date)-bd)/(86400000);
+      if (Math.abs(i.amount-b.amount)<0.01 && diff<=2) {
+        b.status=i.status='matched'; b.matched_id=i.id; i.matched_id=b.id;
+        usedI.add(i.id); usedB.add(b.id); break;
+      }
+    }
+  }
+
+  // Pass 3 — remaining
+  transactions.forEach(t => {
+    if (t.status==='pending')
+      t.status = t.reference ? 'unmatched' : 'exception';
+  });
+
+  computeStats();
+  buildLedger();
+  render();
+  populateCategories();
+  if (announce) flashBanner();
+}
+
+function computeStats() {
+  stats.matched   = transactions.filter(t=>t.status==='matched').length;
+  stats.unmatched = transactions.filter(t=>t.status==='unmatched').length;
+  stats.exceptions= transactions.filter(t=>t.status==='exception'||t.status==='duplicate').length;
+  stats.bankBal   = transactions.filter(t=>t.source==='bank').reduce((a,t)=>a+t.amount,0);
+  stats.intBal    = transactions.filter(t=>t.source==='internal').reduce((a,t)=>a+t.amount,0);
+  stats.variance  = stats.bankBal - stats.intBal;
+
+  document.getElementById('sMatched').textContent   = stats.matched;
+  document.getElementById('sUnmatched').textContent = stats.unmatched;
+  document.getElementById('sException').textContent = stats.exceptions;
+  document.getElementById('sBankBal').textContent   = fmtAmt(Math.abs(stats.bankBal));
+  document.getElementById('sVariance').textContent  =
+    `Variance: ${stats.variance===0?'None':fmtAmt(stats.variance)}`;
+}
+
+function buildLedger() {
+  const src = currentTab==='all' ? null : currentTab;
+  let txs = src ? transactions.filter(t=>t.source===src) : transactions;
+  txs = [...txs].sort((a,b)=>a.date.localeCompare(b.date));
+  let balance=0;
+  ledgerData = txs.map(t => {
+    balance+=t.amount;
+    return { ...t,
+      debit:  t.amount<0?Math.abs(t.amount):null,
+      credit: t.amount>0?t.amount:null,
+      balance: Math.round(balance*100)/100
+    };
+  });
+}
+
+function fmtAmt(n) {
+  return '₹'+Math.abs(n).toLocaleString('en-IN',{maximumFractionDigits:2});
+}
+
+function pillHtml(status) {
+  const map={matched:'Matched',unmatched:'Unmatched',exception:'Exception',duplicate:'Duplicate',pending:'Pending'};
+  return `<span class="pill pill-${status}">${map[status]||status}</span>`;
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render() {
+  const statusF = document.getElementById('filterStatus').value;
+  const catF    = document.getElementById('filterCat').value;
+  const search  = document.getElementById('searchBox').value.toLowerCase();
+
+  let rows = ledgerData.filter(r => {
+    if (statusF && r.status!==statusF) return false;
+    if (catF && r.category!==catF) return false;
+    if (search && !r.description.toLowerCase().includes(search) && !(r.reference||'').toLowerCase().includes(search)) return false;
+    return true;
+  });
+
+  const titles = {bank:'Bank Ledger',internal:'Internal Ledger',all:'All Transactions'};
+  document.getElementById('tableTitle').textContent = titles[currentTab];
+  document.getElementById('tableCount').textContent = `${rows.length} entries`;
+
+  const tbody = document.getElementById('ledgerBody');
+  if (!rows.length) {
+    tbody.innerHTML=`<tr><td colspan="7"><div class="empty"><div class="e-icon">🔍</div><p>No transactions match your filters.</p></div></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = rows.map(r => `
+    <tr onclick="toggleExpand('${r.id}')" data-id="${r.id}">
+      <td class="td-date">${r.date}</td>
+      <td class="td-desc">
+        ${r.description}
+        ${r.reference?`<br/><span class="ref">${r.reference}</span>`:''}
+      </td>
+      <td>${r.category?`<span class="td-cat">${r.category}</span>`:''}</td>
+      <td class="td-amt debit">${r.debit?fmtAmt(r.debit):''}</td>
+      <td class="td-amt credit">${r.credit?fmtAmt(r.credit):''}</td>
+      <td class="td-balance">${fmtAmt(r.balance)}</td>
+      <td>${pillHtml(r.status)}</td>
+    </tr>
+  `).join('');
+}
+
+function toggleExpand(id) {
+  const existing = document.querySelector('.expanded-row');
+  if (existing) existing.remove();
+  if (expandedRow===id) { expandedRow=null; return; }
+  expandedRow=id;
+  const tx = transactions.find(t=>t.id===id);
+  if (!tx) return;
+  const matched = tx.matched_id ? transactions.find(t=>t.id===tx.matched_id) : null;
+  const row = document.querySelector(`tr[data-id="${id}"]`);
+  if (!row) return;
+  const exp = document.createElement('tr');
+  exp.className='expanded-row';
+  exp.innerHTML=`<td colspan="7">
+    <div class="expand-panel" style="padding:12px 16px">
+      <div class="expand-kv"><span>ID</span><span>${tx.id}</span></div>
+      <div class="expand-kv"><span>Source</span><span>${tx.source}</span></div>
+      <div class="expand-kv"><span>Amount</span><span>${fmtAmt(tx.amount)}</span></div>
+      <div class="expand-kv"><span>Status</span><span>${tx.status}</span></div>
+      ${matched?`<div class="expand-kv"><span>Matched With</span><span>${matched.description}</span></div>`:''}
+      ${tx.note?`<div class="expand-kv"><span>Note</span><span>${tx.note}</span></div>`:''}
+      <div style="flex:1"></div>
+      <button class="btn btn-danger" style="height:32px;font-size:12px" onclick="deleteTx('${tx.id}',event)">🗑 Delete</button>
+    </div>
+  </td>`;
+  row.after(exp);
+}
+
+function deleteTx(id, e) {
+  e.stopPropagation();
+  transactions = transactions.filter(t=>t.id!==id);
+  expandedRow=null;
+  reconcile(false);
+}
+
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+function switchTab(tab, el) {
+  currentTab=tab;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  el.classList.add('active');
+  buildLedger();
+  render();
+}
+
+// ── Categories filter ─────────────────────────────────────────────────────────
+function populateCategories() {
+  const cats = [...new Set(transactions.map(t=>t.category).filter(Boolean))].sort();
+  const sel = document.getElementById('filterCat');
+  const cur = sel.value;
+  sel.innerHTML = `<option value="">All Categories</option>` +
+    cats.map(c=>`<option${c===cur?' selected':''}>${c}</option>`).join('');
+}
+
+// ── Drawer ────────────────────────────────────────────────────────────────────
+function openDrawer() {
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('f-date').value = '2025-01-30';
+  document.getElementById('drawerMsg').textContent='';
+}
+function closeDrawer() { document.getElementById('overlay').classList.remove('open'); }
+function closeDrawerOnBg(e) { if(e.target===document.getElementById('overlay')) closeDrawer(); }
+function selectSource(src) {
+  selectedSrc=src;
+  document.getElementById('rb-bank').classList.toggle('sel',src==='bank');
+  document.getElementById('rb-internal').classList.toggle('sel',src==='internal');
+}
+function submitTx() {
+  const date=document.getElementById('f-date').value;
+  const desc=document.getElementById('f-desc').value.trim();
+  const amt=parseFloat(document.getElementById('f-amt').value);
+  const ref=document.getElementById('f-ref').value.trim()||null;
+  const cat=document.getElementById('f-cat').value||null;
+  if (!date||!desc||isNaN(amt)) {
+    document.getElementById('drawerMsg').textContent='Please fill date, description, and amount.';
+    return;
+  }
+  transactions.push({ id:uid(), date, description:desc, amount:amt, source:selectedSrc,
+    reference:ref, category:cat, status:'pending', matched_id:null, created_at:new Date().toISOString() });
+  closeDrawer();
+  reconcile(false);
+  document.getElementById('drawerMsg').textContent='';
+}
+
+// ── Reconcile button ──────────────────────────────────────────────────────────
+function flashBanner() {
+  const btn = document.getElementById('reconcileBtn');
+  btn.textContent='✓ Done!';
+  btn.style.background='#00c288';
+  setTimeout(()=>{ btn.textContent='Reconcile Now'; btn.style.background=''; },2000);
+}
+
+// ── Reset ─────────────────────────────────────────────────────────────────────
+function resetData() {
+  expandedRow=null;
+  seed();
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+seed();
+</script>
+</body>
+</html>
